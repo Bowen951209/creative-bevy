@@ -2,17 +2,20 @@ use bevy::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 
 #[derive(Component)]
-struct Body;
+struct AngularVelocity(f32);
 
 #[derive(Component)]
-struct AngularVelocity(f32);
+struct OrbitAngularVelocity(f32);
+
+#[derive(Component)]
+struct Distance(f32);
 
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
         .add_plugins((DefaultPlugins, PanCamPlugin::default()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (exit_on_esc, rotate_bodies))
+        .add_systems(Update, (exit_on_esc, rotate_bodies, move_bodies))
         .run();
 }
 
@@ -21,44 +24,73 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
+    // Camera
     commands.spawn((Camera2d, PanCam::default()));
 
-    let radii = [50.0];
-    let colors = [(1.0, 0.0, 0.0)];
+    // The origin circle
+    commands.spawn((
+        Mesh2d(meshes.add(Mesh::from(Circle::new(1.0)))),
+        MeshMaterial2d(materials.add(Color::WHITE)),
+        Transform::from_xyz(0.0, 0.0, 1.0),
+    ));
 
     let line_color = materials.add(Color::WHITE);
 
-    for (radius, color) in radii.into_iter().zip(colors) {
-        let circle = meshes.add(Mesh::from(Circle::new(radius)));
-        let color = materials.add(Color::srgb(color.0, color.1, color.2));
+    let d1 = 6.81818181;
+    let d2 = 68.18181818;
+    let orbit_ang_vel = 0.149724203523329;
 
-        commands
-            .spawn((
-                Body,
-                AngularVelocity(0.8),
-                Mesh2d(circle),
-                MeshMaterial2d(color),
-                Transform::from_xyz(0.0, 0.0, 0.0),
-            ))
-            .with_children(|parent| {
-                let line = meshes.add(Mesh::from(Rectangle::new(radius, 1.0)));
-                parent.spawn((
-                    Mesh2d(line),
-                    MeshMaterial2d(line_color.clone()),
-                    Transform::from_xyz(radius * 0.5, 0.0, 0.0),
-                ));
-            });
-    }
+    // circle 1
+    spawn_circle(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        50.0,
+        -d1, // negative y
+        Color::linear_rgb(1.0, 0.0, 0.0),
+        line_color.clone(),
+        AngularVelocity(0.119812746260658),
+        OrbitAngularVelocity(orbit_ang_vel),
+    );
+
+    // circle 2
+    spawn_circle(
+        &mut commands,
+        &mut meshes,
+        &mut materials,
+        25.0,
+        d2,
+        Color::linear_rgb(0.0, 1.0, 0.0),
+        line_color,
+        AngularVelocity(0.209547118048671),
+        OrbitAngularVelocity(orbit_ang_vel),
+    );
 }
 
 fn rotate_bodies(
     time: Res<Time>,
-    mut query: Query<(&AngularVelocity, &mut Transform), With<Body>>,
+    mut query: Query<(&AngularVelocity, &mut Transform), With<Mesh2d>>,
 ) {
     for (angular_velocity, mut transform) in query.iter_mut() {
-        transform.rotate(Quat::from_rotation_z(
-            angular_velocity.0 * time.delta_secs(),
+        let translation = transform.translation;
+
+        *transform = Transform::from_rotation(Quat::from_rotation_z(
+            angular_velocity.0 * time.elapsed_secs(),
         ));
+
+        transform.translation = translation;
+    }
+}
+
+fn move_bodies(
+    time: Res<Time>,
+    mut query: Query<(&Distance, &OrbitAngularVelocity, &mut Transform), With<Mesh2d>>,
+) {
+    for (distance_to_origin, orbit_angular_velocity, mut transform) in query.iter_mut() {
+        let theta = orbit_angular_velocity.0 * time.elapsed_secs();
+        let x = distance_to_origin.0 * theta.cos();
+        let y = distance_to_origin.0 * theta.sin();
+        transform.translation = Vec3::new(x, y, 0.0);
     }
 }
 
@@ -67,4 +99,37 @@ fn exit_on_esc(keyboard_input: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<
         info!("Exiting application on Escape key press.");
         exit.write(AppExit::Success);
     }
+}
+
+fn spawn_circle(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    materials: &mut ResMut<Assets<ColorMaterial>>,
+    radius: f32,
+    x: f32,
+    color: Color,
+    line_color: Handle<ColorMaterial>,
+    angular_velocity: AngularVelocity,
+    orbit_angular_velocity: OrbitAngularVelocity,
+) {
+    let circle = meshes.add(Mesh::from(Circle::new(radius)));
+    let color = materials.add(color);
+
+    commands
+        .spawn((
+            angular_velocity,
+            orbit_angular_velocity,
+            Distance(x), // Leave the distance signed can help rendering
+            Mesh2d(circle),
+            MeshMaterial2d(color),
+            Transform::from_xyz(x, 0.0, 0.0),
+        ))
+        .with_children(|parent| {
+            let line = meshes.add(Mesh::from(Rectangle::new(radius, 1.0)));
+            parent.spawn((
+                Mesh2d(line),
+                MeshMaterial2d(line_color),
+                Transform::from_xyz(radius * 0.5, 0.0, 0.0),
+            ));
+        });
 }
