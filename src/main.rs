@@ -13,7 +13,7 @@ struct Distance(f32);
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
-        .add_plugins((DefaultPlugins, PanCamPlugin::default()))
+        .add_plugins((DefaultPlugins, PanCamPlugin))
         .add_systems(Startup, setup)
         .add_systems(Update, (exit_on_esc, rotate_bodies, move_bodies))
         .run();
@@ -36,9 +36,9 @@ fn setup(
 
     let line_color = materials.add(Color::WHITE);
 
-    let d1 = 6.81818181;
-    let d2 = 68.18181818;
-    let orbit_ang_vel = 0.149724203523329;
+    let d1 = 6.818_182;
+    let d2 = 68.181_816;
+    let orbit_ang_vel = 0.149_724_2;
 
     // circle 1
     spawn_circle(
@@ -49,7 +49,7 @@ fn setup(
         -d1, // negative y
         Color::linear_rgb(1.0, 0.0, 0.0),
         line_color.clone(),
-        AngularVelocity(0.119812746260658),
+        AngularVelocity(0.119_812_75),
         OrbitAngularVelocity(orbit_ang_vel),
     );
 
@@ -62,7 +62,7 @@ fn setup(
         d2,
         Color::linear_rgb(0.0, 1.0, 0.0),
         line_color,
-        AngularVelocity(0.209547118048671),
+        AngularVelocity(0.209_547_12),
         OrbitAngularVelocity(orbit_ang_vel),
     );
 }
