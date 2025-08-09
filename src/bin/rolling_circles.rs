@@ -7,6 +7,7 @@
 
 use bevy::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
+use creative_bevy::plugins::esc_exit_plugin::EscExitPlugin;
 
 #[derive(Component)]
 struct AngularVelocity(f32);
@@ -20,9 +21,9 @@ struct Distance(f32);
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
-        .add_plugins((DefaultPlugins, PanCamPlugin))
+        .add_plugins((DefaultPlugins, PanCamPlugin, EscExitPlugin))
         .add_systems(Startup, setup)
-        .add_systems(Update, (exit_on_esc, rotate_bodies, move_bodies))
+        .add_systems(Update, (rotate_bodies, move_bodies))
         .run();
 }
 
@@ -98,13 +99,6 @@ fn move_bodies(
         let x = distance_to_origin.0 * theta.cos();
         let y = distance_to_origin.0 * theta.sin();
         transform.translation = Vec3::new(x, y, 0.0);
-    }
-}
-
-fn exit_on_esc(keyboard_input: Res<ButtonInput<KeyCode>>, mut exit: EventWriter<AppExit>) {
-    if keyboard_input.just_pressed(KeyCode::Escape) {
-        info!("Exiting application on Escape key press.");
-        exit.write(AppExit::Success);
     }
 }
 
