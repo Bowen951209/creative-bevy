@@ -1,3 +1,10 @@
+//! # Rolling Circles
+//! This scene includes two circles rolling around each other.
+//! This is a simple demonstration of a physics model I was working on.
+//! The angular velocities and circle radii are hard-coded, calculated with a numerical equations solver.
+//! I actually got two sets of solutions, but only one is used here.
+//! This program is added the `PanCamPlugin`, so users can zoom or drag the camera around.
+
 use bevy::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 
