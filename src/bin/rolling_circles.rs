@@ -18,6 +18,16 @@ struct OrbitAngularVelocity(f32);
 #[derive(Component)]
 struct Distance(f32);
 
+/// Information for spawning a circle.
+struct CircleInfo {
+    radius: f32,
+    x: f32,
+    color: Color,
+    line_color: Handle<ColorMaterial>,
+    angular_velocity: AngularVelocity,
+    orbit_angular_velocity: OrbitAngularVelocity,
+}
+
 fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
@@ -53,12 +63,14 @@ fn setup(
         &mut commands,
         &mut meshes,
         &mut materials,
-        50.0,
-        -d1, // negative y
-        Color::linear_rgb(1.0, 0.0, 0.0),
-        line_color.clone(),
-        AngularVelocity(0.119_812_75),
-        OrbitAngularVelocity(orbit_ang_vel),
+        CircleInfo {
+            radius: 50.0,
+            x: -d1, // negative y
+            color: Color::linear_rgb(1.0, 0.0, 0.0),
+            line_color: line_color.clone(),
+            angular_velocity: AngularVelocity(0.119_812_75),
+            orbit_angular_velocity: OrbitAngularVelocity(orbit_ang_vel),
+        },
     );
 
     // circle 2
@@ -66,12 +78,14 @@ fn setup(
         &mut commands,
         &mut meshes,
         &mut materials,
-        25.0,
-        d2,
-        Color::linear_rgb(0.0, 1.0, 0.0),
-        line_color,
-        AngularVelocity(0.209_547_12),
-        OrbitAngularVelocity(orbit_ang_vel),
+        CircleInfo {
+            radius: 25.0,
+            x: d2,
+            color: Color::linear_rgb(0.0, 1.0, 0.0),
+            line_color,
+            angular_velocity: AngularVelocity(0.209_547_12),
+            orbit_angular_velocity: OrbitAngularVelocity(orbit_ang_vel),
+        },
     );
 }
 
@@ -106,31 +120,26 @@ fn spawn_circle(
     commands: &mut Commands,
     meshes: &mut ResMut<Assets<Mesh>>,
     materials: &mut ResMut<Assets<ColorMaterial>>,
-    radius: f32,
-    x: f32,
-    color: Color,
-    line_color: Handle<ColorMaterial>,
-    angular_velocity: AngularVelocity,
-    orbit_angular_velocity: OrbitAngularVelocity,
+    circle_info: CircleInfo,
 ) {
-    let circle = meshes.add(Mesh::from(Circle::new(radius)));
-    let color = materials.add(color);
+    let circle = meshes.add(Mesh::from(Circle::new(circle_info.radius)));
+    let color = materials.add(circle_info.color);
 
     commands
         .spawn((
-            angular_velocity,
-            orbit_angular_velocity,
-            Distance(x), // Leave the distance signed can help rendering
+            circle_info.angular_velocity,
+            circle_info.orbit_angular_velocity,
+            Distance(circle_info.x), // Leave the distance signed can help rendering
             Mesh2d(circle),
             MeshMaterial2d(color),
-            Transform::from_xyz(x, 0.0, 0.0),
+            Transform::from_xyz(circle_info.x, 0.0, 0.0),
         ))
         .with_children(|parent| {
-            let line = meshes.add(Mesh::from(Rectangle::new(radius, 1.0)));
+            let line = meshes.add(Mesh::from(Rectangle::new(circle_info.radius, 1.0)));
             parent.spawn((
                 Mesh2d(line),
-                MeshMaterial2d(line_color),
-                Transform::from_xyz(radius * 0.5, 0.0, 0.0),
+                MeshMaterial2d(circle_info.line_color),
+                Transform::from_xyz(circle_info.radius * 0.5, 0.0, 0.0),
             ));
         });
 }
