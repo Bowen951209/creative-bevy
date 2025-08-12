@@ -15,46 +15,46 @@ impl Plugin for SkyboxPlugin {
 
 #[derive(Resource)]
 pub struct Cubemap {
-    is_loaded: bool,
     image_handle: Handle<Image>,
 }
 
 impl Cubemap {
     pub fn new(image_handle: Handle<Image>) -> Self {
-        Self {
-            is_loaded: false,
-            image_handle,
-        }
+        Self { image_handle }
     }
 }
 
 fn asset_loaded(
-    asset_server: Res<AssetServer>,
+    mut events: EventReader<AssetEvent<Image>>,
     mut images: ResMut<Assets<Image>>,
-    mut cubemap: ResMut<Cubemap>,
     mut skyboxes: Query<&mut Skybox>,
+    cubemap: ResMut<Cubemap>,
 ) {
-    if !cubemap.is_loaded && asset_server.load_state(&cubemap.image_handle).is_loaded() {
-        let image = images.get_mut(&cubemap.image_handle).unwrap();
-        // NOTE: PNGs do not have any metadata that could indicate they contain a cubemap texture,
-        // so they appear as one texture. The following code reconfigures the texture as necessary.
-        if image.texture_descriptor.array_layer_count() == 1 {
-            info!(
-                "Cubemap image {} has array layer count of 1; reinterpreting as a cubemap texture.",
-                cubemap.image_handle.id()
-            );
+    for event in events.read() {
+        if let AssetEvent::LoadedWithDependencies { id } = event {
+            if *id == cubemap.image_handle.id() {
+                let image = images.get_mut(&cubemap.image_handle).unwrap();
+                // NOTE: PNGs do not have any metadata that could indicate they contain a cubemap texture,
+                // so they appear as one texture. The following code reconfigures the texture as necessary.
+                if image.texture_descriptor.array_layer_count() == 1 {
+                    info!(
+                        "Cubemap image {} has array layer count of 1; reinterpreting as a cubemap texture.",
+                        cubemap.image_handle.id()
+                    );
 
-            image.reinterpret_stacked_2d_as_array(6);
-            image.texture_view_descriptor = Some(TextureViewDescriptor {
-                dimension: Some(TextureViewDimension::Cube),
-                ..default()
-            });
+                    image.reinterpret_stacked_2d_as_array(6);
+                    image.texture_view_descriptor = Some(TextureViewDescriptor {
+                        dimension: Some(TextureViewDimension::Cube),
+                        ..default()
+                    });
+                }
+
+                for mut skybox in &mut skyboxes {
+                    skybox.image = cubemap.image_handle.clone();
+                }
+
+                info!("Cubemap image {id} loaded");
+            }
         }
-
-        for mut skybox in &mut skyboxes {
-            skybox.image = cubemap.image_handle.clone();
-        }
-
-        cubemap.is_loaded = true;
     }
 }
