@@ -70,14 +70,14 @@ fn insert_physics(
     mut command: Commands,
     mut ran: Local<bool>,
     meshes: Res<Assets<Mesh>>,
-    query: Query<(Entity, &Name, &Mesh3d)>,
+    query: Query<(&ChildOf, &Name, &Mesh3d)>,
 ) {
     if *ran {
         return;
     }
 
     let mut sum = 0;
-    for (entity, _, mesh3d) in query
+    for (child_of, _, mesh3d) in query
         .iter()
         .filter(|(_, name, _)| name.starts_with("collider_"))
     {
@@ -85,9 +85,11 @@ fn insert_physics(
 
         let collider = Collider::from_bevy_mesh(mesh, &ComputedColliderShape::default()).unwrap();
 
+        // Insert the physics components to the entity's parent, not the entity itself
         command
-            .entity(entity)
+            .entity(child_of.0)
             .insert((RigidBody::Dynamic, collider, Restitution::new(0.8)));
+
         sum += 1;
     }
 
