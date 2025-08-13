@@ -14,6 +14,17 @@ const THIRD_PERSON_CAMERA_SENSITIVITY: f32 = 0.000002;
 #[derive(Component)]
 struct Controller;
 
+#[derive(Component)]
+struct Ball;
+
+/// Gizmo configuration for visualizing the force applied to the ball.
+///
+/// Note: On Vulkan, this causes persistent validation errors such as
+/// `VALIDATION [SYNC-HAZARD-READ-AFTER-WRITE (0xe4d96472)]`. This is a Bevy bug.
+/// See: [#1](https://github.com/Bowen951209/creative-bevy/issues/1)
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct ForceGizmos;
+
 fn main() {
     App::new()
         .add_plugins((
@@ -31,6 +42,7 @@ fn main() {
             // we can remove this plugin. See: https://github.com/bevyengine/bevy/pull/18358
             SceneHotReloadingPlugin,
         ))
+        .init_gizmo_group::<ForceGizmos>()
         .insert_resource(KeyBindings {
             toggle_grab_cursor: KeyCode::F1,
             ..Default::default()
@@ -43,6 +55,7 @@ fn main() {
                 control_ball,
                 activate_fly_camera,
                 activate_third_person_camera,
+                draw_ball_force,
             ),
         )
         .run();
@@ -52,6 +65,7 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut gizmo_config_store: ResMut<GizmoConfigStore>,
     asset_server: Res<AssetServer>,
 ) {
     commands.spawn((
@@ -79,6 +93,7 @@ fn setup(
 
     let ball = commands
         .spawn((
+            Ball,
             Mesh3d(meshes.add(Sphere::new(ball_radius))),
             MeshMaterial3d(materials.add(StandardMaterial {
                 base_color: Color::srgb_u8(190, 246, 250),
@@ -87,7 +102,6 @@ fn setup(
                 ..default()
             })),
             Controller,
-            Name::new("Ball"),
             RigidBody::Dynamic,
             Transform::from_xyz(0.0, 1.0, 0.0),
             Collider::ball(ball_radius),
@@ -112,6 +126,10 @@ fn setup(
         },
         Transform::from_translation(Vec3::new(0.0, 2.0, 5.0)),
     ));
+
+    // Configure ForceGizmos settings
+    let (gizmo_config, _) = gizmo_config_store.config_mut::<ForceGizmos>();
+    gizmo_config.line.width = 25.0;
 }
 
 /// This system adds physics components to the parents of meshes imported from glTF whose names start with "collider_".
@@ -157,11 +175,22 @@ fn insert_physics(
     *should_run = false;
 }
 
+fn draw_ball_force(
+    mut gizmos: Gizmos<ForceGizmos>,
+    query: Query<(&Transform, &ExternalForce), With<Ball>>,
+) {
+    for (transform, external_force) in query.iter() {
+        let start = transform.translation;
+        let end = start + external_force.force;
+        gizmos.arrow(start, end, Color::srgb(1.0, 0.7, 0.2));
+    }
+}
+
 fn control_ball(
     mut command: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     camera_transform_query: Query<&Transform, With<ThirdPersonCamera>>,
-    ball_query: Query<Entity, (With<RigidBody>, With<Controller>)>,
+    ball_query: Query<Entity, With<Ball>>,
 ) {
     let Ok(camera_transform) = camera_transform_query.single() else {
         return;
@@ -199,7 +228,7 @@ fn activate_third_person_camera(
     mut commands: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     camera_query: Query<Entity, With<FlyCam>>,
-    ball_query: Query<Entity, (With<RigidBody>, With<Controller>)>,
+    ball_query: Query<Entity, With<Ball>>,
 ) {
     let ball = match ball_query.single() {
         Ok(ball) => ball,
