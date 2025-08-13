@@ -2,6 +2,7 @@ use bevy::{core_pipeline::Skybox, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_flycam::{FlyCam, KeyBindings, prelude::NoCameraPlayerPlugin};
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_rapier3d::prelude::*;
+use bevy_scene_hot_reloading::SceneHotReloadingPlugin;
 use creative_bevy::plugins::{
     esc_exit_plugin::EscExitPlugin,
     skybox_plugin::{Cubemap, SkyboxPlugin},
@@ -25,6 +26,10 @@ fn main() {
             WorldInspectorPlugin::new(),
             RapierPhysicsPlugin::<NoUserData>::default(),
             RapierDebugRenderPlugin::default(),
+            // SceneHotReloadingPlugin is a temporary fix for a scene hot reloading bug in Bevy.
+            // This issue is fixed in the main branch. When we upgrade to Bevy 0.17,
+            // we can remove this plugin. See: https://github.com/bevyengine/bevy/pull/18358
+            SceneHotReloadingPlugin,
         ))
         .insert_resource(KeyBindings {
             toggle_grab_cursor: KeyCode::F1,
@@ -109,37 +114,47 @@ fn setup(
     ));
 }
 
+/// This system adds physics components to the parents of meshes imported from glTF whose names start with "collider_".
+/// It runs only once, one frame after the scene is loaded.
+/// Note: We intentionally delay execution by one frame after loading because [`ChildOf`] components are not yet available immediately after the scene loads.
 fn insert_physics(
-    mut command: Commands,
-    mut ran: Local<bool>,
+    mut commands: Commands,
+    mut scene_events: EventReader<AssetEvent<Scene>>,
     meshes: Res<Assets<Mesh>>,
-    query: Query<(&ChildOf, &Name, &Mesh3d)>,
+    mesh_query: Query<(&ChildOf, &Name, &Mesh3d)>,
+    mut should_run: Local<bool>,
 ) {
-    if *ran {
+    for event in scene_events.read() {
+        let AssetEvent::LoadedWithDependencies { id: _ } = event else {
+            *should_run = true;
+            return;
+        };
+    }
+
+    if !*should_run {
         return;
     }
 
     let mut sum = 0;
-    for (child_of, _, mesh3d) in query
+    for (child_of, _, mesh3d) in mesh_query
         .iter()
         .filter(|(_, name, _)| name.starts_with("collider_"))
     {
         let mesh = meshes.get(mesh3d.id()).unwrap();
-
         let collider = Collider::from_bevy_mesh(mesh, &ComputedColliderShape::default()).unwrap();
 
         // Insert the physics components to the entity's parent, not the entity itself
-        command
-            .entity(child_of.0)
-            .insert((RigidBody::Dynamic, collider, Restitution::new(0.8)));
+        commands.entity(child_of.parent()).insert((
+            RigidBody::Dynamic,
+            collider,
+            Restitution::new(0.8),
+        ));
 
         sum += 1;
     }
 
-    if sum != 0 {
-        info!("Spawned {sum} colliders");
-        *ran = true;
-    }
+    info!("Inserted {sum} colliders");
+    *should_run = false;
 }
 
 fn control_ball(

@@ -9,6 +9,7 @@ bevy-inspector-egui = "0.32.0"
 bevy_flycam = "0.16.1"
 bevy_pancam = "0.18.0"
 bevy_rapier3d = "0.31.0"
+bevy_scene_hot_reloading = "0.1.0"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
