@@ -199,26 +199,22 @@ fn control_ball(
     let force_scale = 2.0;
 
     for entity in ball_query.iter() {
-        let direction_xyz = if keyboard_input.pressed(KeyCode::KeyW) {
-            camera_transform.forward().as_vec3()
-        } else if keyboard_input.pressed(KeyCode::KeyS) {
-            camera_transform.back().as_vec3()
-        } else if keyboard_input.pressed(KeyCode::KeyA) {
-            camera_transform.left().as_vec3()
-        } else if keyboard_input.pressed(KeyCode::KeyD) {
-            camera_transform.right().as_vec3()
-        } else {
-            command.entity(entity).insert(ExternalForce {
-                force: Vec3::ZERO,
-                ..Default::default()
-            });
-            continue;
-        };
-
-        let direction_xz = vec3(direction_xyz.x, 0.0, direction_xyz.z).normalize() * force_scale;
+        let mut direction = Vec3::ZERO;
+        if keyboard_input.pressed(KeyCode::KeyW) {
+            direction += xz_normalize(camera_transform.forward().as_vec3());
+        }
+        if keyboard_input.pressed(KeyCode::KeyS) {
+            direction += xz_normalize(camera_transform.back().as_vec3());
+        }
+        if keyboard_input.pressed(KeyCode::KeyA) {
+            direction += xz_normalize(camera_transform.left().as_vec3());
+        }
+        if keyboard_input.pressed(KeyCode::KeyD) {
+            direction += xz_normalize(camera_transform.right().as_vec3());
+        }
 
         command.entity(entity).insert(ExternalForce {
-            force: direction_xz,
+            force: direction * force_scale,
             ..Default::default()
         });
     }
@@ -269,4 +265,8 @@ fn activate_fly_camera(
                 .insert(FlyCam);
         }
     }
+}
+
+fn xz_normalize(vec: Vec3) -> Vec3 {
+    Vec3::new(vec.x, 0.0, vec.z).normalize()
 }
