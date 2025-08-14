@@ -47,16 +47,21 @@ fn setup(
 
     // The origin circle
     commands.spawn((
-        Mesh2d(meshes.add(Mesh::from(Circle::new(1.0)))),
+        Mesh2d(meshes.add(Mesh::from(Circle::new(0.3)))),
         MeshMaterial2d(materials.add(Color::WHITE)),
         Transform::from_xyz(0.0, 0.0, 1.0),
     ));
 
     let line_color = materials.add(Color::WHITE);
 
-    let d1 = 6.818_182;
-    let d2 = 68.181_816;
-    let orbit_ang_vel = 0.149_724_2;
+    let m1 = 2.0;
+    let m2 = 1.0;
+    let r1 = 10.0;
+    let r2 = 5.0;
+    let orbit_ang_vel = 0.512097661192167;
+
+    let d1 = m2 * (r1 + r2) / (m1 + m2);
+    let d2 = m1 * (r1 + r2) / (m1 + m2);
 
     // circle 1
     spawn_circle(
@@ -64,11 +69,11 @@ fn setup(
         &mut meshes,
         &mut materials,
         CircleInfo {
-            radius: 50.0,
-            x: -d1, // negative y
+            radius: r1,
+            x: -d1, // negative x
             color: Color::linear_rgb(1.0, 0.0, 0.0),
             line_color: line_color.clone(),
-            angular_velocity: AngularVelocity(0.119_812_75),
+            angular_velocity: AngularVelocity(0.304439475364754),
             orbit_angular_velocity: OrbitAngularVelocity(orbit_ang_vel),
         },
     );
@@ -79,11 +84,11 @@ fn setup(
         &mut meshes,
         &mut materials,
         CircleInfo {
-            radius: 25.0,
+            radius: r2,
             x: d2,
             color: Color::linear_rgb(0.0, 1.0, 0.0),
             line_color,
-            angular_velocity: AngularVelocity(0.209_547_12),
+            angular_velocity: AngularVelocity(0.927414032846995),
             orbit_angular_velocity: OrbitAngularVelocity(orbit_ang_vel),
         },
     );
@@ -135,7 +140,7 @@ fn spawn_circle(
             Transform::from_xyz(circle_info.x, 0.0, 0.0),
         ))
         .with_children(|parent| {
-            let line = meshes.add(Mesh::from(Rectangle::new(circle_info.radius, 1.0)));
+            let line = meshes.add(Mesh::from(Rectangle::new(circle_info.radius, 0.3)));
             parent.spawn((
                 Mesh2d(line),
                 MeshMaterial2d(circle_info.line_color),
