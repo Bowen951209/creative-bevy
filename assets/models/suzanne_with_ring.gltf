@@ -27,7 +27,7 @@
 			],
 			"scale":[
 				0.3893531560897827,
-				0.9860842227935791,
+				0.9860841631889343,
 				0.42336007952690125
 			],
 			"translation":[
@@ -61,22 +61,22 @@
 		},
 		{
 			"mesh":3,
-			"name":"collider_cube",
+			"name":"collider_plane.001",
 			"rotation":[
-				-0.29011398553848267,
-				-0.04688611999154091,
-				-0.13464820384979248,
-				0.9463115930557251
+				0,
+				0,
+				0.22315146028995514,
+				0.9747837781906128
 			],
 			"scale":[
-				0.3727874457836151,
-				0.3727874159812927,
-				0.3727874457836151
+				4.941770553588867,
+				4.941770553588867,
+				4.941770553588867
 			],
 			"translation":[
-				0,
-				1.6671028137207031,
-				0
+				9.337130546569824,
+				1.31582510471344,
+				-0.1852356344461441
 			]
 		}
 	],
@@ -121,7 +121,7 @@
 			]
 		},
 		{
-			"name":"collider_cube.001",
+			"name":"collider_Plane.001",
 			"primitives":[
 				{
 					"attributes":{
@@ -129,7 +129,7 @@
 						"NORMAL":13,
 						"TEXCOORD_0":14
 					},
-					"indices":15
+					"indices":11
 				}
 			]
 		}
@@ -240,15 +240,15 @@
 		{
 			"bufferView":12,
 			"componentType":5126,
-			"count":24,
+			"count":4,
 			"max":[
 				1,
-				1,
+				0,
 				1
 			],
 			"min":[
 				-1,
-				-1,
+				0,
 				-1
 			],
 			"type":"VEC3"
@@ -256,20 +256,14 @@
 		{
 			"bufferView":13,
 			"componentType":5126,
-			"count":24,
+			"count":4,
 			"type":"VEC3"
 		},
 		{
 			"bufferView":14,
 			"componentType":5126,
-			"count":24,
+			"count":4,
 			"type":"VEC2"
-		},
-		{
-			"bufferView":15,
-			"componentType":5123,
-			"count":36,
-			"type":"SCALAR"
 		}
 	],
 	"bufferViews":[
@@ -347,32 +341,26 @@
 		},
 		{
 			"buffer":0,
-			"byteLength":288,
+			"byteLength":48,
 			"byteOffset":149628,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":288,
-			"byteOffset":149916,
+			"byteLength":48,
+			"byteOffset":149676,
 			"target":34962
 		},
 		{
 			"buffer":0,
-			"byteLength":192,
-			"byteOffset":150204,
+			"byteLength":32,
+			"byteOffset":149724,
 			"target":34962
-		},
-		{
-			"buffer":0,
-			"byteLength":72,
-			"byteOffset":150396,
-			"target":34963
 		}
 	],
 	"buffers":[
 		{
-			"byteLength":150468,
+			"byteLength":149756,
 			"uri":"suzanne_with_ring.bin"
 		}
 	]

@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use bevy::{core_pipeline::Skybox, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_flycam::{FlyCam, KeyBindings, prelude::NoCameraPlayerPlugin};
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
@@ -17,14 +19,6 @@ struct Controller;
 #[derive(Component)]
 struct Ball;
 
-/// Gizmo configuration for visualizing the force applied to the ball.
-///
-/// Note: On Vulkan, this causes persistent validation errors such as
-/// `VALIDATION [SYNC-HAZARD-READ-AFTER-WRITE (0xe4d96472)]`. This is a Bevy bug.
-/// See: [#1](https://github.com/Bowen951209/creative-bevy/issues/1)
-#[derive(Default, Reflect, GizmoConfigGroup)]
-struct ForceGizmos;
-
 fn main() {
     App::new()
         .add_plugins((
@@ -42,7 +36,6 @@ fn main() {
             // we can remove this plugin. See: https://github.com/bevyengine/bevy/pull/18358
             SceneHotReloadingPlugin,
         ))
-        .init_gizmo_group::<ForceGizmos>()
         .insert_resource(KeyBindings {
             toggle_grab_cursor: KeyCode::F1,
             ..Default::default()
@@ -55,7 +48,6 @@ fn main() {
                 control_ball,
                 activate_fly_camera,
                 activate_third_person_camera,
-                draw_ball_force,
             ),
         )
         .run();
@@ -65,7 +57,6 @@ fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut gizmo_config_store: ResMut<GizmoConfigStore>,
     asset_server: Res<AssetServer>,
 ) {
     commands.spawn((
@@ -83,6 +74,11 @@ fn setup(
             ..default()
         }
         .build(),
+        Transform {
+            translation: Vec3::new(0.0, 2.0, 0.0),
+            rotation: Quat::from_rotation_x(-PI / 4.),
+            ..default()
+        },
     ));
 
     let scene_handle = asset_server.load::<Scene>("models/suzanne_with_ring.gltf#Scene0");
@@ -105,6 +101,11 @@ fn setup(
             RigidBody::Dynamic,
             Transform::from_xyz(0.0, 1.0, 0.0),
             Collider::ball(ball_radius),
+            ExternalForce::default(),
+            Damping {
+                linear_damping: 0.1,
+                angular_damping: 1.0,
+            },
         ))
         .id();
 
@@ -126,10 +127,6 @@ fn setup(
         },
         Transform::from_translation(Vec3::new(0.0, 2.0, 5.0)),
     ));
-
-    // Configure ForceGizmos settings
-    let (gizmo_config, _) = gizmo_config_store.config_mut::<ForceGizmos>();
-    gizmo_config.line.width = 25.0;
 }
 
 /// This system adds physics components to the parents of meshes imported from glTF whose names start with "collider_".
@@ -175,48 +172,34 @@ fn insert_physics(
     *should_run = false;
 }
 
-fn draw_ball_force(
-    mut gizmos: Gizmos<ForceGizmos>,
-    query: Query<(&Transform, &ExternalForce), With<Ball>>,
-) {
-    for (transform, external_force) in query.iter() {
-        let start = transform.translation;
-        let end = start + external_force.force;
-        gizmos.arrow(start, end, Color::srgb(1.0, 0.7, 0.2));
-    }
-}
-
 fn control_ball(
-    mut command: Commands,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     camera_transform_query: Query<&Transform, With<ThirdPersonCamera>>,
-    ball_query: Query<Entity, With<Ball>>,
+    mut query: Query<&mut ExternalForce, With<Ball>>,
 ) {
     let Ok(camera_transform) = camera_transform_query.single() else {
         return;
     };
 
-    let force_scale = 2.0;
+    let force_scale = 1.0;
 
-    for entity in ball_query.iter() {
+    for mut external_force in query.iter_mut() {
         let mut direction = Vec3::ZERO;
         if keyboard_input.pressed(KeyCode::KeyW) {
-            direction += xz_normalize(camera_transform.forward().as_vec3());
+            // direction += xz_normalize(camera_transform.forward().as_vec3());
+            direction += camera_transform.left().as_vec3();
         }
         if keyboard_input.pressed(KeyCode::KeyS) {
-            direction += xz_normalize(camera_transform.back().as_vec3());
+            direction += camera_transform.right().as_vec3();
         }
         if keyboard_input.pressed(KeyCode::KeyA) {
-            direction += xz_normalize(camera_transform.left().as_vec3());
+            direction += camera_transform.back().as_vec3();
         }
         if keyboard_input.pressed(KeyCode::KeyD) {
-            direction += xz_normalize(camera_transform.right().as_vec3());
+            direction += camera_transform.forward().as_vec3();
         }
 
-        command.entity(entity).insert(ExternalForce {
-            force: direction * force_scale,
-            ..Default::default()
-        });
+        external_force.torque = direction * force_scale;
     }
 }
 
@@ -265,8 +248,4 @@ fn activate_fly_camera(
                 .insert(FlyCam);
         }
     }
-}
-
-fn xz_normalize(vec: Vec3) -> Vec3 {
-    Vec3::new(vec.x, 0.0, vec.z).normalize()
 }
