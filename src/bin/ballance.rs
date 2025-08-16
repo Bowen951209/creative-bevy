@@ -90,11 +90,33 @@ fn setup(
     let ball = commands
         .spawn((
             Ball,
-            Mesh3d(meshes.add(Sphere::new(ball_radius))),
+            Mesh3d(
+                meshes.add(
+                    Mesh::from(Sphere::new(ball_radius))
+                        .with_generated_tangents() // for normal map & depth map
+                        .unwrap(),
+                ),
+            ),
             MeshMaterial3d(materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(190, 246, 250),
-                metallic: 0.0,
-                perceptual_roughness: 1.0,
+                base_color_texture: Some(
+                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_diff_4k.png"),
+                ),
+                depth_map: Some(
+                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_disp_4k.png"),
+                ),
+                parallax_depth_scale: 0.01,
+                normal_map_texture: Some(
+                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_nor_gl_4k.png"),
+                ),
+                diffuse_transmission_texture: Some(
+                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_diff_4k.png"),
+                ),
+                occlusion_texture: Some(
+                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_ao_4k.png"),
+                ),
+                metallic_roughness_texture: Some(
+                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_rough_4k.png"),
+                ),
                 ..default()
             })),
             Controller,
