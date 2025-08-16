@@ -8,7 +8,7 @@ pub struct ThirdPersonCameraPlugin;
 
 impl Plugin for ThirdPersonCameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, update_camera);
+        app.add_systems(Update, (update_camera, update_camera_distance_on_scroll));
     }
 }
 
@@ -58,5 +58,36 @@ fn update_camera(
         } else {
             error!("Camera following an entity that doesn't have a Transform component");
         }
+    }
+}
+
+fn update_camera_distance_on_scroll(
+    mut scroll_events: EventReader<bevy::input::mouse::MouseWheel>,
+    mut cam_query: Query<&mut ThirdPersonCamera>,
+    mut target_distance: Local<Option<f32>>,
+    mut should_update: Local<bool>,
+) {
+    let mut camera = cam_query
+        .single_mut()
+        .expect("Expected a single ThirdPersonCamera component");
+
+    let target_distance = target_distance.get_or_insert(camera.distance);
+
+    for event in scroll_events.read() {
+        *target_distance -= event.y * 0.7;
+        *target_distance = target_distance.clamp(0.0, 20.0);
+        *should_update = true;
+    }
+
+    if !*should_update {
+        return;
+    }
+
+    let current_distance = camera.distance;
+    let new_distance = current_distance.lerp(*target_distance, 0.1);
+    camera.distance = new_distance;
+
+    if (new_distance - current_distance).abs() < 1e-5 {
+        *should_update = false;
     }
 }
