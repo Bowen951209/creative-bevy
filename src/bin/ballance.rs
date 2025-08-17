@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use bevy::{core_pipeline::Skybox, pbr::CascadeShadowConfigBuilder, prelude::*};
+use bevy::{audio::Volume, core_pipeline::Skybox, pbr::CascadeShadowConfigBuilder, prelude::*};
 use bevy_flycam::{FlyCam, KeyBindings, prelude::NoCameraPlayerPlugin};
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_rapier3d::prelude::*;
@@ -46,6 +46,7 @@ fn main() {
             (
                 insert_physics,
                 control_ball,
+                ball_sound,
                 activate_fly_camera,
                 activate_third_person_camera,
             ),
@@ -128,6 +129,9 @@ fn setup(
                 linear_damping: 0.1,
                 angular_damping: 1.0,
             },
+            Velocity::default(),
+            AudioPlayer::new(asset_server.load("sounds/stones-falling-6375.ogg")),
+            PlaybackSettings::LOOP,
         ))
         .id();
 
@@ -222,6 +226,12 @@ fn control_ball(
         }
 
         external_force.torque = direction * force_scale;
+    }
+}
+
+fn ball_sound(mut query: Query<(&Velocity, &mut AudioSink), With<Ball>>) {
+    for (velocity, mut sink) in query.iter_mut() {
+        sink.set_volume(Volume::Linear(velocity.linvel.length() * 0.4));
     }
 }
 
