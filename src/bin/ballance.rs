@@ -87,7 +87,6 @@ fn setup(
     commands.spawn(SceneRoot(scene_handle));
 
     let ball_radius = 0.5;
-
     let ball = commands
         .spawn((
             Ball,
@@ -130,8 +129,7 @@ fn setup(
                 angular_damping: 1.0,
             },
             Velocity::default(),
-            AudioPlayer::new(asset_server.load("sounds/stones-falling-6375.ogg")),
-            PlaybackSettings::LOOP,
+            ActiveEvents::COLLISION_EVENTS,
         ))
         .id();
 
@@ -229,8 +227,45 @@ fn control_ball(
     }
 }
 
-fn ball_sound(mut query: Query<(&Velocity, &mut AudioSink), With<Ball>>) {
-    for (velocity, mut sink) in query.iter_mut() {
+/// Sets the ball's sound volume according to its velocity.
+/// The sound is muted when the ball is not in contact with anything.
+/// This system will insert audio components for you; do not insert them manually when creating the ball.
+/// Otherwise, a short period of sound may play even if the ball is not in contact with anything.
+fn ball_sound(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut collision_events: EventReader<CollisionEvent>,
+    mut query: Query<(&Velocity, &mut AudioSink), With<Ball>>,
+) {
+    // If the ball is not in contact with anything, mute the sound; otherwise, unmute it.
+    // We listen to collision events to determine this.
+    // We also insert an `AudioPlayer` component if it doesn't exist.
+    for event in collision_events.read() {
+        let (entity, is_started) = match event {
+            CollisionEvent::Started(entity, _, _) => (entity, true),
+            CollisionEvent::Stopped(entity, _, _) => (entity, false),
+        };
+
+        match query.get_mut(*entity) {
+            Ok((_, mut sink)) => {
+                if is_started {
+                    sink.unmute();
+                } else {
+                    sink.mute();
+                }
+            }
+            Err(_) => {
+                // Audio components don't exist, insert them
+                commands.entity(*entity).insert((
+                    AudioPlayer::new(asset_server.load("sounds/stones-falling-6375.ogg")),
+                    PlaybackSettings::LOOP,
+                ));
+            }
+        }
+    }
+
+    // Set the volume based on the ball's velocity. If the ball is muted, don't process.
+    for (velocity, mut sink) in query.iter_mut().filter(|q| !q.1.is_muted()) {
         sink.set_volume(Volume::Linear(velocity.linvel.length() * 0.4));
     }
 }
