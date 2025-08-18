@@ -82,7 +82,7 @@ fn setup(
         },
     ));
 
-    let scene_handle = asset_server.load::<Scene>("models/suzanne_with_ring.gltf#Scene0");
+    let scene_handle = asset_server.load::<Scene>("levels/level0/level0.gltf#Scene0");
 
     commands.spawn(SceneRoot(scene_handle));
 
@@ -184,7 +184,7 @@ fn insert_physics(
 
         // Insert the physics components to the entity's parent, not the entity itself
         commands.entity(child_of.parent()).insert((
-            RigidBody::Dynamic,
+            RigidBody::Fixed,
             collider,
             Restitution::new(0.8),
         ));
