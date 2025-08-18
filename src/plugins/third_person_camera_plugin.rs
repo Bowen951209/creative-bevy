@@ -67,6 +67,10 @@ fn update_camera_distance_on_scroll(
     mut target_distance: Local<Option<f32>>,
     mut should_update: Local<bool>,
 ) {
+    if cam_query.is_empty() {
+        return;
+    }
+
     let mut camera = cam_query
         .single_mut()
         .expect("Expected a single ThirdPersonCamera component");
