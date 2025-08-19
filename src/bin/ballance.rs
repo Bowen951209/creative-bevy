@@ -50,6 +50,7 @@ fn main() {
                 insert_physics,
                 insert_goal,
                 detect_goal,
+                rotate_goal,
                 control_ball,
                 ball_sound,
                 activate_fly_camera,
@@ -268,6 +269,13 @@ fn detect_goal(
                 ..default()
             },
         ));
+    }
+}
+
+/// Rotate the goal around its Y-axis
+fn rotate_goal(mut query: Query<&mut Transform, With<Goal>>) {
+    for mut transform in query.iter_mut() {
+        transform.rotate(Quat::from_rotation_y(0.1));
     }
 }
 
