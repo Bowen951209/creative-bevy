@@ -17,7 +17,7 @@ const THIRD_PERSON_CAMERA_SENSITIVITY: f32 = 0.000002;
 struct Controller;
 
 #[derive(Component)]
-struct Ball;
+struct Ball(f32);
 
 #[derive(Component)]
 struct Goal;
@@ -94,7 +94,7 @@ fn setup(
     let ball_radius = 0.5;
     let ball = commands
         .spawn((
-            Ball,
+            Ball(ball_radius),
             Mesh3d(
                 meshes.add(
                     Mesh::from(Sphere::new(ball_radius))
@@ -125,16 +125,7 @@ fn setup(
                 ..default()
             })),
             Controller,
-            RigidBody::Dynamic,
             Transform::from_xyz(0.0, 1.0, 0.0),
-            Collider::ball(ball_radius),
-            ExternalForce::default(),
-            Damping {
-                linear_damping: 0.1,
-                angular_damping: 1.0,
-            },
-            Velocity::default(),
-            ActiveEvents::COLLISION_EVENTS,
         ))
         .id();
 
@@ -166,6 +157,7 @@ fn insert_physics(
     mut scene_events: EventReader<AssetEvent<Scene>>,
     meshes: Res<Assets<Mesh>>,
     mesh_query: Query<(&ChildOf, &Name, &Mesh3d)>,
+    ball_query: Query<(Entity, &Ball), (With<Ball>, Without<Collider>)>,
     mut should_run: Local<bool>,
 ) {
     for event in scene_events.read() {
@@ -180,6 +172,7 @@ fn insert_physics(
     }
 
     let mut sum = 0;
+    // Insert physics to parents
     for (child_of, _, mesh3d) in mesh_query
         .iter()
         .filter(|(_, name, _)| name.starts_with("collider_"))
@@ -196,8 +189,25 @@ fn insert_physics(
 
         sum += 1;
     }
+    info!("Inserted {sum} physics from scene");
 
-    info!("Inserted {sum} colliders");
+    let mut sum = 0;
+    for (entity, ball) in ball_query.iter() {
+        commands.entity(entity).insert((
+            RigidBody::Dynamic,
+            Collider::ball(ball.0),
+            ExternalForce::default(),
+            Damping {
+                linear_damping: 0.1,
+                angular_damping: 1.0,
+            },
+            Velocity::default(),
+            ActiveEvents::COLLISION_EVENTS,
+        ));
+        sum += 1;
+    }
+    info!("Inserted physics for {sum} balls");
+
     *should_run = false;
 }
 
@@ -233,7 +243,7 @@ fn detect_goal(
     query: Query<(), With<Goal>>,
 ) {
     for event in collision_events.read() {
-        let CollisionEvent::Started(_, entity, _) = event else {
+        let CollisionEvent::Started(entity, _, _) = event else {
             continue;
         };
 
@@ -308,8 +318,8 @@ fn ball_sound(
     // We also insert an `AudioPlayer` component if it doesn't exist.
     for event in collision_events.read() {
         let (entity, is_started) = match event {
-            CollisionEvent::Started(entity, _, _) => (entity, true),
-            CollisionEvent::Stopped(entity, _, _) => (entity, false),
+            CollisionEvent::Started(_, entity, _) => (entity, true),
+            CollisionEvent::Stopped(_, entity, _) => (entity, false),
         };
 
         if !ball_query.contains(*entity) {
