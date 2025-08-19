@@ -236,6 +236,7 @@ fn ball_sound(
     asset_server: Res<AssetServer>,
     mut collision_events: EventReader<CollisionEvent>,
     mut query: Query<(&Velocity, &mut AudioSink), With<Ball>>,
+    ball_query: Query<(), With<Ball>>,
 ) {
     // If the ball is not in contact with anything, mute the sound; otherwise, unmute it.
     // We listen to collision events to determine this.
@@ -245,6 +246,10 @@ fn ball_sound(
             CollisionEvent::Started(entity, _, _) => (entity, true),
             CollisionEvent::Stopped(entity, _, _) => (entity, false),
         };
+
+        if !ball_query.contains(*entity) {
+            continue; // Not a ball, skip
+        }
 
         match query.get_mut(*entity) {
             Ok((_, mut sink)) => {
