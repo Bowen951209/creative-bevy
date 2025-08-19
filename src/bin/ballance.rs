@@ -19,6 +19,9 @@ struct Controller;
 #[derive(Component)]
 struct Ball;
 
+#[derive(Component)]
+struct Goal;
+
 fn main() {
     App::new()
         .add_plugins((
@@ -45,6 +48,8 @@ fn main() {
             Update,
             (
                 insert_physics,
+                insert_goal,
+                detect_goal,
                 control_ball,
                 ball_sound,
                 activate_fly_camera,
@@ -194,6 +199,66 @@ fn insert_physics(
 
     info!("Inserted {sum} colliders");
     *should_run = false;
+}
+
+fn insert_goal(
+    mut commands: Commands,
+    mut scene_events: EventReader<AssetEvent<Scene>>,
+    meshes: Res<Assets<Mesh>>,
+    query: Query<(&ChildOf, &Name, &Mesh3d)>,
+) {
+    for event in scene_events.read() {
+        let AssetEvent::LoadedWithDependencies { id: _ } = event else {
+            return;
+        };
+    }
+
+    for (child_of, _, mesh3d) in query
+        .iter()
+        .filter(|(_, name, _)| name.starts_with("goal_"))
+    {
+        let mesh = meshes.get(mesh3d.id()).unwrap();
+        let collider = Collider::from_bevy_mesh(mesh, &ComputedColliderShape::default()).unwrap();
+
+        commands
+            .entity(child_of.parent())
+            .insert((Goal, collider, Sensor));
+    }
+}
+
+fn detect_goal(
+    mut commands: Commands,
+    mut collision_events: EventReader<CollisionEvent>,
+    asset_server: Res<AssetServer>,
+    query: Query<(), With<Goal>>,
+) {
+    for event in collision_events.read() {
+        let CollisionEvent::Started(_, entity, _) = event else {
+            continue;
+        };
+
+        if !query.contains(*entity) {
+            continue; // Not a goal, skip
+        }
+
+        info!("Goal reached by entity: {:?}", entity);
+        commands.spawn((
+            AudioPlayer::new(asset_server.load("sounds/mixkit-guitar-stroke-down-slow-2339.ogg")),
+            PlaybackSettings::DESPAWN,
+        ));
+
+        commands.spawn((
+            Text::new("You Win!"),
+            TextFont::from_font_size(30.0),
+            TextShadow::default(),
+            TextLayout::new_with_justify(JustifyText::Center),
+            Node {
+                align_self: AlignSelf::Center,
+                justify_self: JustifySelf::Center,
+                ..default()
+            },
+        ));
+    }
 }
 
 fn control_ball(
