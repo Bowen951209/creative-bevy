@@ -371,29 +371,32 @@ fn ball_sound(
     }
 }
 
-/// Detect when ball's y-axis go lower than the boundary's.
-/// Level designer can add a empty object in Blender and sets its name to "bottom"
-/// to define the boundary.
+/// Detect when the ball's y position drops below the "bottom" boundary entity.
+/// Level designers can add an empty object named "bottom" in Blender to define the out-of-bounds threshold.
+/// When the ball falls below this threshold, logs a message and displays "You Fall!" text.
+/// If the "bottom" entity is missing, logs an error. These checks only run once per scene load to avoid repeated messages.
 fn detect_out_of_bounds(
     mut commands: Commands,
     mut scene_events: EventReader<AssetEvent<Scene>>,
     bottom_query: Query<(&Transform, &Name)>,
     mut ball_query: Query<(&Transform, &mut Ball)>,
-    mut can_run: Local<bool>,
+    mut should_run: Local<bool>,
 ) {
     for event in scene_events.read() {
         match event {
             AssetEvent::Modified { id: _ } => {
-                *can_run = false;
+                // Scene is not loaded, shouldn't run
+                *should_run = false;
             }
             AssetEvent::LoadedWithDependencies { id: _ } => {
-                *can_run = true;
+                // Scene is loaded, should run
+                *should_run = true;
             }
             _ => continue,
         }
     }
 
-    if !*can_run {
+    if !*should_run {
         return;
     }
 
@@ -402,7 +405,7 @@ fn detect_out_of_bounds(
         .find(|(_, name)| name.as_str() == "bottom")
     else {
         error!("Bottom entity not found!");
-        *can_run = false;
+        *should_run = false; // We only want to log this once
         return;
     };
 
