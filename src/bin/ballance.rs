@@ -17,7 +17,19 @@ const THIRD_PERSON_CAMERA_SENSITIVITY: f32 = 0.000002;
 struct Controller;
 
 #[derive(Component)]
-struct Ball(f32);
+struct Ball {
+    radius: f32,
+    is_in_bounds: bool,
+}
+
+impl Ball {
+    fn new(radius: f32) -> Self {
+        Self {
+            radius,
+            is_in_bounds: true,
+        }
+    }
+}
 
 #[derive(Component)]
 struct Goal;
@@ -53,6 +65,7 @@ fn main() {
                 rotate_goal,
                 control_ball,
                 ball_sound,
+                detect_out_of_bounds,
                 activate_fly_camera,
                 activate_third_person_camera,
             ),
@@ -95,7 +108,7 @@ fn setup(
     let ball_radius = 0.5;
     let ball = commands
         .spawn((
-            Ball(ball_radius),
+            Ball::new(ball_radius),
             Mesh3d(
                 meshes.add(
                     Mesh::from(Sphere::new(ball_radius))
@@ -196,7 +209,7 @@ fn insert_physics(
     for (entity, ball) in ball_query.iter() {
         commands.entity(entity).insert((
             RigidBody::Dynamic,
-            Collider::ball(ball.0),
+            Collider::ball(ball.radius),
             ExternalForce::default(),
             Damping {
                 linear_damping: 0.1,
@@ -355,6 +368,61 @@ fn ball_sound(
     // Set the volume based on the ball's velocity. If the ball is muted, don't process.
     for (velocity, mut sink) in query.iter_mut().filter(|q| !q.1.is_muted()) {
         sink.set_volume(Volume::Linear(velocity.linvel.length() * 0.4));
+    }
+}
+
+/// Detect when ball's y-axis go lower than the boundary's.
+/// Level designer can add a empty object in Blender and sets its name to "bottom"
+/// to define the boundary.
+fn detect_out_of_bounds(
+    mut commands: Commands,
+    mut scene_events: EventReader<AssetEvent<Scene>>,
+    bottom_query: Query<(&Transform, &Name)>,
+    mut ball_query: Query<(&Transform, &mut Ball)>,
+    mut can_run: Local<bool>,
+) {
+    for event in scene_events.read() {
+        match event {
+            AssetEvent::Modified { id: _ } => {
+                *can_run = false;
+            }
+            AssetEvent::LoadedWithDependencies { id: _ } => {
+                *can_run = true;
+            }
+            _ => continue,
+        }
+    }
+
+    if !*can_run {
+        return;
+    }
+
+    let Some(bottom) = bottom_query
+        .iter()
+        .find(|(_, name)| name.as_str() == "bottom")
+    else {
+        error!("Bottom entity not found!");
+        *can_run = false;
+        return;
+    };
+
+    for (_, mut ball) in ball_query.iter_mut().filter(|(transform, ball)| {
+        (transform.translation.y < bottom.0.translation.y) && ball.is_in_bounds
+    }) {
+        info!("A ball is out of bounds!");
+        ball.is_in_bounds = false;
+
+        commands.spawn((
+            Text::new("You Fall!"),
+            TextFont::from_font_size(30.0),
+            TextShadow::default(),
+            TextLayout::new_with_justify(JustifyText::Center),
+            Node {
+                align_self: AlignSelf::Center,
+                justify_self: JustifySelf::Center,
+                ..default()
+            },
+        ));
     }
 }
 
