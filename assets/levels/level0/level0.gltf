@@ -266,7 +266,7 @@
 	],
 	"meshes":[
 		{
-			"name":"Torus.001",
+			"name":"goal_Torus.001",
 			"primitives":[
 				{
 					"attributes":{
