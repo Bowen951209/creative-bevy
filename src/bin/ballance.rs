@@ -373,10 +373,11 @@ fn ball_sound(
 
 /// Detect when the ball's y position drops below the "bottom" boundary entity.
 /// Level designers can add an empty object named "bottom" in Blender to define the out-of-bounds threshold.
-/// When the ball falls below this threshold, logs a message and displays "You Fall!" text.
+/// When the ball falls below this threshold, logs a message and displays "You Fall!" text, and play a trumpet sound.
 /// If the "bottom" entity is missing, logs an error. These checks only run once per scene load to avoid repeated messages.
 fn detect_out_of_bounds(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
     mut scene_events: EventReader<AssetEvent<Scene>>,
     bottom_query: Query<(&Transform, &Name)>,
     mut ball_query: Query<(&Transform, &mut Ball)>,
@@ -420,11 +421,17 @@ fn detect_out_of_bounds(
             TextFont::from_font_size(30.0),
             TextShadow::default(),
             TextLayout::new_with_justify(JustifyText::Center),
+            TextColor(Color::srgb_u8(168, 50, 98)),
             Node {
                 align_self: AlignSelf::Center,
                 justify_self: JustifySelf::Center,
                 ..default()
             },
+        ));
+
+        commands.spawn((
+            AudioPlayer::new(asset_server.load("sounds/cartoon-fail-trumpet-278822.ogg")),
+            PlaybackSettings::DESPAWN,
         ));
     }
 }
