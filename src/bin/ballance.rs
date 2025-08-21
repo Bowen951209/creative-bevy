@@ -34,6 +34,9 @@ impl Ball {
 #[derive(Component)]
 struct Goal;
 
+#[derive(Component)]
+struct RestartPosition(Vec3);
+
 fn main() {
     App::new()
         .add_plugins((
@@ -68,6 +71,7 @@ fn main() {
                 detect_out_of_bounds,
                 activate_fly_camera,
                 activate_third_person_camera,
+                restart,
             ),
         )
         .run();
@@ -106,6 +110,7 @@ fn setup(
     commands.spawn(SceneRoot(scene_handle));
 
     let ball_radius = 0.5;
+    let ball_position = vec3(0.0, 1.0, 0.0);
     let ball = commands
         .spawn((
             Ball::new(ball_radius),
@@ -139,7 +144,8 @@ fn setup(
                 ..default()
             })),
             Controller,
-            Transform::from_xyz(0.0, 1.0, 0.0),
+            Transform::from_translation(ball_position),
+            RestartPosition(ball_position),
         ))
         .id();
 
@@ -416,18 +422,23 @@ fn detect_out_of_bounds(
         info!("A ball is out of bounds!");
         ball.is_in_bounds = false;
 
-        commands.spawn((
-            Text::new("You Fall!"),
-            TextFont::from_font_size(30.0),
-            TextShadow::default(),
-            TextLayout::new_with_justify(JustifyText::Center),
-            TextColor(Color::srgb_u8(168, 50, 98)),
-            Node {
-                align_self: AlignSelf::Center,
-                justify_self: JustifySelf::Center,
-                ..default()
-            },
-        ));
+        commands
+            .spawn((
+                Text::new("You Fall!\n"),
+                TextFont::from_font_size(30.0),
+                TextShadow::default(),
+                TextLayout::new_with_justify(JustifyText::Center),
+                TextColor(Color::srgb_u8(168, 50, 98)),
+                Node {
+                    align_self: AlignSelf::Center,
+                    justify_self: JustifySelf::Center,
+                    ..default()
+                },
+            ))
+            .with_child((
+                TextSpan::new("Press R to restart"),
+                TextColor(Color::srgb_u8(0, 130, 119)),
+            ));
 
         commands.spawn((
             AudioPlayer::new(asset_server.load("sounds/cartoon-fail-trumpet-278822.ogg")),
@@ -480,5 +491,43 @@ fn activate_fly_camera(
                 .remove::<ThirdPersonCamera>()
                 .insert(FlyCam);
         }
+    }
+}
+
+/// Restarts the game when the player presses the R key.
+///  - Teleports the ball back to its restart position (specified by the [`RestartPosition`] component) and resets its velocity.
+///  - Plays a sound effect.
+///  - If any fail text is on the screen, it will be despawned. This is necessary when restarting after a fall.
+fn restart(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut ball_query: Query<(&mut Ball, &mut Transform, &mut Velocity, &RestartPosition)>,
+    text_query: Query<(Entity, &Text)>,
+) {
+    if !keyboard_input.just_pressed(KeyCode::KeyR) {
+        return;
+    }
+
+    info!("Teleporting the ball back to restart position");
+    for (mut ball, mut transform, mut velocity, restart_position) in ball_query.iter_mut() {
+        ball.is_in_bounds = true;
+        transform.translation = restart_position.0;
+        velocity.linvel = Vec3::ZERO;
+        velocity.angvel = Vec3::ZERO;
+    }
+
+    commands.spawn((
+        AudioPlayer::new(asset_server.load("sounds/owned-112942.ogg")),
+        PlaybackSettings::DESPAWN,
+    ));
+
+    // Despawn the fail text
+    if let Some(fail_text) = text_query
+        .iter()
+        .find(|(_, text)| text.as_str() == "You Fall!\n")
+    {
+        commands.entity(fail_text.0).despawn();
+        info!("Fall text despawned");
     }
 }
