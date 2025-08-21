@@ -12,6 +12,7 @@ use creative_bevy::plugins::{
     esc_exit_plugin::EscExitPlugin,
     skybox_plugin::{Cubemap, SkyboxPlugin},
     third_person_camera_plugin::{ThirdPersonCamera, ThirdPersonCameraPlugin},
+    timer_plugin::TimerPlugin,
 };
 
 const THIRD_PERSON_CAMERA_SENSITIVITY: f32 = 0.000002;
@@ -47,6 +48,7 @@ fn main() {
             EscExitPlugin,
             SkyboxPlugin,
             ThirdPersonCameraPlugin,
+            TimerPlugin,
             NoCameraPlayerPlugin,
             EguiPlugin::default(),
             WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F2)),
