@@ -1,6 +1,9 @@
 use std::f32::consts::PI;
 
-use bevy::{audio::Volume, core_pipeline::Skybox, pbr::CascadeShadowConfigBuilder, prelude::*};
+use bevy::{
+    audio::Volume, core_pipeline::Skybox, input::common_conditions::input_toggle_active,
+    pbr::CascadeShadowConfigBuilder, prelude::*,
+};
 use bevy_flycam::{FlyCam, KeyBindings, prelude::NoCameraPlayerPlugin};
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
 use bevy_rapier3d::prelude::*;
@@ -46,7 +49,7 @@ fn main() {
             ThirdPersonCameraPlugin,
             NoCameraPlayerPlugin,
             EguiPlugin::default(),
-            WorldInspectorPlugin::new(),
+            WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F2)),
             RapierPhysicsPlugin::<NoUserData>::default(),
             RapierDebugRenderPlugin::default(),
             // SceneHotReloadingPlugin is a temporary fix for a scene hot reloading bug in Bevy.
