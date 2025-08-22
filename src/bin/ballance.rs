@@ -41,6 +41,15 @@ struct Goal;
 #[derive(Component)]
 struct RestartPosition(Vec3);
 
+#[derive(Component)]
+struct Animation {
+    graph_handle: Handle<AnimationGraph>,
+    index: AnimationNodeIndex,
+}
+
+#[derive(Resource)]
+struct LevelScene(Handle<Gltf>);
+
 fn main() {
     App::new()
         .add_plugins((
@@ -67,6 +76,7 @@ fn main() {
         .add_systems(
             Update,
             (
+                spawn_gltf_objects,
                 insert_physics,
                 insert_goal,
                 detect_goal,
@@ -77,6 +87,7 @@ fn main() {
                 activate_fly_camera,
                 activate_third_person_camera,
                 restart,
+                play_animation.after(insert_physics),
             ),
         )
         .run();
@@ -110,9 +121,8 @@ fn setup(
         },
     ));
 
-    let scene_handle = asset_server.load::<Scene>("levels/level0/level0.gltf#Scene0");
-
-    commands.spawn(SceneRoot(scene_handle));
+    let gltf = asset_server.load("levels/level0/level0.gltf");
+    commands.insert_resource(LevelScene(gltf));
 
     let ball_radius = 0.5;
     let ball_position = vec3(0.0, 1.0, 0.0);
@@ -174,6 +184,42 @@ fn setup(
     ));
 }
 
+/// Spawns objects from the [`LevelScene`] GLTF file.
+/// Runs only once, after the GLTF asset referenced by [`LevelScene`] is loaded.
+fn spawn_gltf_objects(
+    mut commands: Commands,
+    scene: Res<LevelScene>,
+    gltf_assets: Res<Assets<Gltf>>,
+    mut graphs: ResMut<Assets<AnimationGraph>>,
+    mut loaded: Local<bool>,
+) {
+    // Only do this once
+    if *loaded {
+        return;
+    }
+    // Wait until the scene is loaded
+    let Some(gltf) = gltf_assets.get(&scene.0) else {
+        return;
+    };
+
+    info!("Spawning GLTF objects");
+
+    commands.spawn(SceneRoot(gltf.scenes[0].clone()));
+    info!("Scene index 0 spawned");
+
+    for animation in &gltf.animations {
+        let (graph, index) = AnimationGraph::from_clip(animation.clone());
+        let graph_handle = graphs.add(graph);
+        commands.spawn(Animation {
+            graph_handle,
+            index,
+        });
+    }
+    info!("Spawned {} animations", gltf.animations.len());
+
+    *loaded = true;
+}
+
 /// This system adds physics components to the parents of meshes imported from glTF whose names start with "collider_".
 /// It runs only once, one frame after the scene is loaded.
 /// Note: We intentionally delay execution by one frame after loading because [`ChildOf`] components are not yet available immediately after the scene loads.
@@ -207,7 +253,7 @@ fn insert_physics(
 
         // Insert the physics components to the entity's parent, not the entity itself
         commands.entity(child_of.parent()).insert((
-            RigidBody::Fixed,
+            RigidBody::KinematicPositionBased, // Some bodies may move with animation, so don't use Fixed.
             collider,
             Restitution::new(0.8),
         ));
@@ -535,4 +581,30 @@ fn restart(
         commands.entity(fail_text.0).despawn();
         info!("Fall text despawned");
     }
+}
+
+/// Plays [`Animation`]s on entities with [`AnimationPlayer`] components.
+/// This system does not match specific animations to specific players; it simply zips the queries in the order they are offered.
+/// Runs once after [`AnimationPlayer`]s are available (i.e., after animations are loaded from the glTF file).
+/// Note: This should run after [`insert_physics`] to avoid conflicts or potential panics.
+fn play_animation(
+    mut commands: Commands,
+    animations: Query<&Animation>,
+    mut players: Query<(Entity, &mut AnimationPlayer)>,
+    mut done: Local<bool>,
+) {
+    if *done || players.is_empty() {
+        return;
+    }
+
+    for (animation, (entity, mut player)) in animations.iter().zip(players.iter_mut()) {
+        player.play(animation.index).repeat();
+        commands
+            .entity(entity)
+            .insert(AnimationGraphHandle(animation.graph_handle.clone()));
+    }
+
+    info!("Played {} animations", animations.iter().count());
+
+    *done = true;
 }
