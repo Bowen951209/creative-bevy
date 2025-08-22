@@ -223,6 +223,7 @@ fn spawn_gltf_objects(
 /// This system adds physics components to the parents of meshes imported from glTF whose names start with "collider_".
 /// It runs only once, one frame after the scene is loaded.
 /// Note: We intentionally delay execution by one frame after loading because [`ChildOf`] components are not yet available immediately after the scene loads.
+#[allow(clippy::type_complexity)]
 fn insert_physics(
     mut commands: Commands,
     mut scene_events: EventReader<AssetEvent<Scene>>,
