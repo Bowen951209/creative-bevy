@@ -10,6 +10,7 @@ use bevy_rapier3d::prelude::*;
 use bevy_scene_hot_reloading::SceneHotReloadingPlugin;
 use creative_bevy::plugins::{
     esc_exit_plugin::EscExitPlugin,
+    mesh_physics_plugin::{self, MeshPhysicsPlugin},
     skybox_plugin::{Cubemap, SkyboxPlugin},
     third_person_camera_plugin::{ThirdPersonCamera, ThirdPersonCameraPlugin},
     timer_plugin::TimerPlugin,
@@ -58,6 +59,7 @@ fn main() {
             SkyboxPlugin,
             ThirdPersonCameraPlugin,
             TimerPlugin,
+            MeshPhysicsPlugin,
             NoCameraPlayerPlugin,
             EguiPlugin::default(),
             WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::F2)),
@@ -74,11 +76,17 @@ fn main() {
         })
         .add_systems(Startup, setup)
         .add_systems(
+            PreUpdate,
+            (
+                // this makes sure ball will only start to fall after floors are ready
+                insert_ball_physics.after(mesh_physics_plugin::insert_physics),
+                insert_goal,
+            ),
+        )
+        .add_systems(
             Update,
             (
                 spawn_gltf_objects,
-                insert_physics,
-                insert_goal,
                 detect_goal,
                 rotate_goal,
                 control_ball,
@@ -87,7 +95,7 @@ fn main() {
                 activate_fly_camera,
                 activate_third_person_camera,
                 restart,
-                play_animation.after(insert_physics),
+                play_animation,
             ),
         )
         .run();
@@ -220,51 +228,18 @@ fn spawn_gltf_objects(
     *loaded = true;
 }
 
-/// This system adds physics components to the parents of meshes imported from glTF whose names start with "collider_".
-/// It runs only once, one frame after the scene is loaded.
-/// Note: We intentionally delay execution by one frame after loading because [`ChildOf`] components are not yet available immediately after the scene loads.
 #[allow(clippy::type_complexity)]
-fn insert_physics(
+fn insert_ball_physics(
     mut commands: Commands,
-    mut scene_events: EventReader<AssetEvent<Scene>>,
-    meshes: Res<Assets<Mesh>>,
-    mesh_query: Query<(&ChildOf, &Name, &Mesh3d)>,
     ball_query: Query<(Entity, &Ball), (With<Ball>, Without<Collider>)>,
-    mut should_run: Local<bool>,
 ) {
-    for event in scene_events.read() {
-        let AssetEvent::LoadedWithDependencies { id: _ } = event else {
-            *should_run = true;
-            return;
-        };
-    }
-
-    if !*should_run {
+    if ball_query.is_empty() {
         return;
     }
 
-    let mut sum = 0;
-    // Insert physics to parents
-    for (child_of, _, mesh3d) in mesh_query
-        .iter()
-        .filter(|(_, name, _)| name.starts_with("collider_"))
-    {
-        let mesh = meshes.get(mesh3d.id()).unwrap();
-        let collider = Collider::from_bevy_mesh(mesh, &ComputedColliderShape::default()).unwrap();
+    let mut count = 0;
 
-        // Insert the physics components to the entity's parent, not the entity itself
-        commands.entity(child_of.parent()).insert((
-            RigidBody::KinematicPositionBased, // Some bodies may move with animation, so don't use Fixed.
-            collider,
-            Restitution::new(0.8),
-        ));
-
-        sum += 1;
-    }
-    info!("Inserted {sum} physics from scene");
-
-    let mut sum = 0;
-    for (entity, ball) in ball_query.iter() {
+    for (entity, ball) in ball_query {
         commands.entity(entity).insert((
             RigidBody::Dynamic,
             Collider::ball(ball.radius),
@@ -276,11 +251,10 @@ fn insert_physics(
             Velocity::default(),
             ActiveEvents::COLLISION_EVENTS,
         ));
-        sum += 1;
-    }
-    info!("Inserted physics for {sum} balls");
 
-    *should_run = false;
+        count += 1;
+    }
+    info!("Inserted physics for {count} balls");
 }
 
 fn insert_goal(
@@ -289,11 +263,17 @@ fn insert_goal(
     meshes: Res<Assets<Mesh>>,
     query: Query<(&ChildOf, &Name, &Mesh3d)>,
 ) {
+    if scene_events.is_empty() {
+        return;
+    }
+
     for event in scene_events.read() {
         let AssetEvent::LoadedWithDependencies { id: _ } = event else {
             return;
         };
     }
+
+    let mut count = 0;
 
     for (child_of, _, mesh3d) in query
         .iter()
@@ -305,7 +285,11 @@ fn insert_goal(
         commands
             .entity(child_of.parent())
             .insert((Goal, collider, Sensor));
+
+        count += 1;
     }
+
+    info!("Inserted {count} goals");
 }
 
 fn detect_goal(
@@ -315,13 +299,17 @@ fn detect_goal(
     query: Query<(), With<Goal>>,
 ) {
     for event in collision_events.read() {
-        let CollisionEvent::Started(entity, _, _) = event else {
+        let CollisionEvent::Started(entity1, entity2, _) = event else {
             continue;
         };
 
-        if !query.contains(*entity) {
+        let entity = if query.contains(*entity1) {
+            entity1
+        } else if query.contains(*entity2) {
+            entity2
+        } else {
             continue; // Not a goal, skip
-        }
+        };
 
         info!("Goal reached by entity: {:?}", entity);
         commands.spawn((
@@ -396,14 +384,18 @@ fn ball_sound(
     // We listen to collision events to determine this.
     // We also insert an `AudioPlayer` component if it doesn't exist.
     for event in collision_events.read() {
-        let (entity, is_started) = match event {
-            CollisionEvent::Started(_, entity, _) => (entity, true),
-            CollisionEvent::Stopped(_, entity, _) => (entity, false),
+        let (entity1, entity2, is_started) = match event {
+            CollisionEvent::Started(entity1, entity2, _) => (entity1, entity2, true),
+            CollisionEvent::Stopped(entity1, entity2, _) => (entity1, entity2, false),
         };
 
-        if !ball_query.contains(*entity) {
-            continue; // Not a ball, skip
-        }
+        let entity = if ball_query.contains(*entity1) {
+            entity1
+        } else if ball_query.contains(*entity2) {
+            entity2
+        } else {
+            continue; // Neither entity is a ball, skip
+        };
 
         match query.get_mut(*entity) {
             Ok((_, mut sink)) => {
@@ -587,7 +579,7 @@ fn restart(
 /// Plays [`Animation`]s on entities with [`AnimationPlayer`] components.
 /// This system does not match specific animations to specific players; it simply zips the queries in the order they are offered.
 /// Runs once after [`AnimationPlayer`]s are available (i.e., after animations are loaded from the glTF file).
-/// Note: This should run after [`insert_physics`] to avoid conflicts or potential panics.
+/// Note: This should run after inserting physics components to avoid conflicts or potential panics.
 fn play_animation(
     mut commands: Commands,
     animations: Query<&Animation>,
