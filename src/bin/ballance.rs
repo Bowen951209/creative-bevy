@@ -589,14 +589,22 @@ fn restart(
 
 /// Plays [`Animation`]s on entities with [`AnimationPlayer`] components.
 /// This system does not match specific animations to specific players; it simply zips the queries in the order they are offered.
-/// Runs once after [`AnimationPlayer`]s are available (i.e., after animations are loaded from the glTF file).
+/// Runs once after [`AnimationPlayer`]s are available (i.e., after animations are loaded from the glTF file)
+/// , and will re-run if scene modified.
 /// Note: This should run after inserting physics components to avoid conflicts or potential panics.
 fn play_animation(
     mut commands: Commands,
+    mut scene_events: EventReader<AssetEvent<Scene>>,
     animations: Query<&Animation>,
     mut players: Query<(Entity, &mut AnimationPlayer)>,
     mut done: Local<bool>,
 ) {
+    for event in scene_events.read() {
+        if let AssetEvent::Modified { id: _ } = event {
+            *done = false;
+        }
+    }
+
     if *done || players.is_empty() {
         return;
     }
