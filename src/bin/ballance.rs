@@ -487,6 +487,7 @@ fn detect_out_of_bounds(
         commands.spawn((
             AudioPlayer::new(asset_server.load("sounds/cartoon-fail-trumpet-278822.ogg")),
             PlaybackSettings::DESPAWN,
+            Name::new("trumpet_sound"),
         ));
     }
 }
@@ -540,7 +541,7 @@ fn activate_fly_camera(
 
 /// Restarts the game when the player presses the R key.
 ///  - Teleports the ball back to its restart position (specified by the [`RestartPosition`] component) and resets its velocity.
-///  - Plays a sound effect.
+///  - Plays a sound effect & despawns the trumpet sound played in [`detect_out_of_bounds`] if it exists.
 ///  - If any fail text is on the screen, it will be despawned. This is necessary when restarting after a fall.
 fn restart(
     mut commands: Commands,
@@ -548,6 +549,7 @@ fn restart(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut ball_query: Query<(&mut Ball, &mut Transform, &mut Velocity, &RestartPosition)>,
     text_query: Query<(Entity, &Text)>,
+    sound_query: Query<(Entity, &Name), With<AudioPlayer>>,
 ) {
     if !keyboard_input.just_pressed(KeyCode::KeyR) {
         return;
@@ -573,6 +575,15 @@ fn restart(
     {
         commands.entity(fail_text.0).despawn();
         info!("Fall text despawned");
+    }
+
+    // Despawn the trumpet sound
+    if let Some(trumpet_sound) = sound_query
+        .iter()
+        .find(|(_, name)| name.as_str() == "trumpet_sound")
+    {
+        commands.entity(trumpet_sound.0).despawn();
+        info!("Trumpet sound despawned");
     }
 }
 
