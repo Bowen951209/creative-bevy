@@ -257,20 +257,24 @@ fn insert_ball_physics(
     info!("Inserted physics for {count} balls");
 }
 
+/// Insert physics components for entities whose name starts with "goal_".
+/// Run after one frame a scene is loaded.
 fn insert_goal(
     mut commands: Commands,
     mut scene_events: EventReader<AssetEvent<Scene>>,
     meshes: Res<Assets<Mesh>>,
     query: Query<(&ChildOf, &Name, &Mesh3d)>,
+    mut should_run: Local<bool>,
 ) {
-    if scene_events.is_empty() {
-        return;
+    for event in scene_events.read() {
+        if let AssetEvent::LoadedWithDependencies { id: _ } = event {
+            *should_run = true;
+            return; // run in next frame
+        }
     }
 
-    for event in scene_events.read() {
-        let AssetEvent::LoadedWithDependencies { id: _ } = event else {
-            return;
-        };
+    if !*should_run {
+        return;
     }
 
     let mut count = 0;
@@ -290,6 +294,7 @@ fn insert_goal(
     }
 
     info!("Inserted {count} goals");
+    *should_run = false;
 }
 
 fn detect_goal(
