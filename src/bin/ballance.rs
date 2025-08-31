@@ -1,8 +1,10 @@
 use std::f32::consts::PI;
 
+use bevy::ecs::query::QueryFilter;
+
 use bevy::{
-    audio::Volume, core_pipeline::Skybox, input::common_conditions::input_toggle_active,
-    pbr::CascadeShadowConfigBuilder, prelude::*,
+    audio::Volume, core_pipeline::Skybox, ecs::query::QueryData,
+    input::common_conditions::input_toggle_active, pbr::CascadeShadowConfigBuilder, prelude::*,
 };
 use bevy_flycam::{FlyCam, KeyBindings, prelude::NoCameraPlayerPlugin};
 use bevy_inspector_egui::{bevy_egui::EguiPlugin, quick::WorldInspectorPlugin};
@@ -17,6 +19,22 @@ use creative_bevy::plugins::{
 };
 
 const THIRD_PERSON_CAMERA_SENSITIVITY: f32 = 0.000002;
+
+#[derive(Component)]
+struct TransformRing;
+
+#[derive(Component)]
+struct Teleport {
+    start: Vec3,
+    end: Vec3,
+    t: f32,
+}
+
+impl Teleport {
+    fn new(start: Vec3, end: Vec3) -> Self {
+        Self { start, end, t: 0.0 }
+    }
+}
 
 #[derive(Component)]
 struct Controller;
@@ -81,6 +99,7 @@ fn main() {
                 // this makes sure ball will only start to fall after floors are ready
                 insert_ball_physics.after(mesh_physics_plugin::insert_physics),
                 insert_goal,
+                insert_transform_ring,
             ),
         )
         .add_systems(
@@ -88,6 +107,7 @@ fn main() {
             (
                 spawn_gltf_objects,
                 detect_goal,
+                detect_transform_ring,
                 rotate_goal,
                 control_ball,
                 ball_sound,
@@ -96,6 +116,7 @@ fn main() {
                 activate_third_person_camera,
                 restart,
                 play_animation,
+                teleport,
             ),
         )
         .run();
@@ -228,6 +249,100 @@ fn spawn_gltf_objects(
     *loaded = true;
 }
 
+fn insert_transform_ring(
+    mut commands: Commands,
+    mut scene_events: EventReader<AssetEvent<Scene>>,
+    meshes: Res<Assets<Mesh>>,
+    mesh_query: Query<(&ChildOf, &Name, &Mesh3d)>,
+    mut should_run: Local<bool>,
+) {
+    for event in scene_events.read() {
+        let AssetEvent::LoadedWithDependencies { id: _ } = event else {
+            *should_run = true;
+            return;
+        };
+    }
+
+    if !*should_run {
+        return;
+    }
+
+    let mut sum = 0;
+
+    for (child_of, _, mesh3d) in mesh_query
+        .iter()
+        .filter(|(_, name, _)| name.starts_with("trans_"))
+    {
+        let mesh = meshes.get(mesh3d.id()).unwrap();
+        let collider = Collider::from_bevy_mesh(mesh, &ComputedColliderShape::default()).unwrap();
+
+        // Insert the physics components to the entity's parent, not the entity itself
+        commands
+            .entity(child_of.parent())
+            .insert((TransformRing, RigidBody::Fixed, collider));
+
+        sum += 1;
+        *should_run = false;
+    }
+
+    info!("Inserted {sum} transform rings");
+}
+
+fn detect_transform_ring(
+    mut commands: Commands,
+    mut collision_events: EventReader<CollisionEvent>,
+    ring_query: Query<&Transform, With<TransformRing>>,
+    ball_query: Query<(&Transform, &Ball)>,
+) {
+    for event in collision_events.read() {
+        let Some(ring) = entity_started_collision(event, &ring_query) else {
+            continue;
+        };
+
+        info!("Transform ring {:?} reached", ring);
+
+        let ring_translation = ring_query.get(ring).unwrap().translation;
+
+        let Some(ball_entity) = entity_started_collision(event, &ball_query) else {
+            panic!("Transform ring collided entity is not a ball!");
+        };
+
+        let ball = ball_query.get(ball_entity).unwrap();
+        let ball_translation = ball.0.translation;
+        let ball_radius = ball.1.radius;
+
+        commands.entity(ball_entity).insert(Teleport::new(
+            ball_translation,
+            ring_translation + vec3(0.0, ball_radius + 0.1, 0.0),
+        ));
+    }
+}
+
+fn teleport(
+    mut commands: Commands,
+    mut query: Query<(&mut Transform, &mut Velocity, &mut Teleport, Entity)>,
+    time: Res<Time>,
+) {
+    for (mut transform, mut velocity, mut teleport, entity) in query.iter_mut() {
+        if teleport.t == 0.0 {
+            info!("Teleporting entity {:?} to {:?}", entity, teleport.end);
+        }
+
+        velocity.linvel = Vec3::ZERO;
+        velocity.angvel = Vec3::ZERO;
+
+        let delta_t = time.delta_secs();
+        teleport.t += delta_t;
+        let t = teleport.t.clamp(0.0, 1.0);
+
+        transform.translation = teleport.start.lerp(teleport.end, t);
+
+        if t == 1.0 {
+            commands.entity(entity).remove::<Teleport>();
+        }
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn insert_ball_physics(
     mut commands: Commands,
@@ -304,16 +419,8 @@ fn detect_goal(
     query: Query<(), With<Goal>>,
 ) {
     for event in collision_events.read() {
-        let CollisionEvent::Started(entity1, entity2, _) = event else {
+        let Some(entity) = entity_started_collision(event, &query) else {
             continue;
-        };
-
-        let entity = if query.contains(*entity1) {
-            entity1
-        } else if query.contains(*entity2) {
-            entity2
-        } else {
-            continue; // Not a goal, skip
         };
 
         info!("Goal reached by entity: {:?}", entity);
@@ -624,4 +731,22 @@ fn play_animation(
     info!("Played {} animations", animations.iter().count());
 
     *done = true;
+}
+
+fn entity_started_collision<T, F>(event: &CollisionEvent, query: &Query<T, F>) -> Option<Entity>
+where
+    T: QueryData,
+    F: QueryFilter,
+{
+    if let CollisionEvent::Started(entity1, entity2, _) = event {
+        if query.contains(*entity1) {
+            Some(*entity1)
+        } else if query.contains(*entity2) {
+            Some(*entity2)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
 }
