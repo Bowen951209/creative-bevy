@@ -165,28 +165,7 @@ fn setup(
                         .unwrap(),
                 ),
             ),
-            MeshMaterial3d(materials.add(StandardMaterial {
-                base_color_texture: Some(
-                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_diff_4k.png"),
-                ),
-                depth_map: Some(
-                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_disp_4k.png"),
-                ),
-                parallax_depth_scale: 0.01,
-                normal_map_texture: Some(
-                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_nor_gl_4k.png"),
-                ),
-                diffuse_transmission_texture: Some(
-                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_diff_4k.png"),
-                ),
-                occlusion_texture: Some(
-                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_ao_4k.png"),
-                ),
-                metallic_roughness_texture: Some(
-                    asset_server.load("textures/broken_brick_wall/broken_brick_wall_rough_4k.png"),
-                ),
-                ..default()
-            })),
+            MeshMaterial3d(materials.add(material("broken_brick_wall", &asset_server))),
             Controller,
             Transform::from_translation(ball_position),
             RestartPosition(ball_position),
@@ -291,17 +270,19 @@ fn insert_transform_ring(
 fn detect_transform_ring(
     mut commands: Commands,
     mut collision_events: EventReader<CollisionEvent>,
-    ring_query: Query<&Transform, With<TransformRing>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    asset_server: Res<AssetServer>,
+    ring_query: Query<(&Transform, &Name), With<TransformRing>>,
     ball_query: Query<(&Transform, &Ball)>,
 ) {
     for event in collision_events.read() {
-        let Some(ring) = entity_started_collision(event, &ring_query) else {
+        let Some(entity) = entity_started_collision(event, &ring_query) else {
             continue;
         };
 
-        info!("Transform ring {:?} reached", ring);
+        let (ring_transform, ring_name) = ring_query.get(entity).unwrap();
 
-        let ring_translation = ring_query.get(ring).unwrap().translation;
+        info!("Transform ring {:?} reached", ring_name);
 
         let Some(ball_entity) = entity_started_collision(event, &ball_query) else {
             panic!("Transform ring collided entity is not a ball!");
@@ -313,8 +294,19 @@ fn detect_transform_ring(
 
         commands.entity(ball_entity).insert(Teleport::new(
             ball_translation,
-            ring_translation + vec3(0.0, ball_radius + 0.1, 0.0),
+            ring_transform.translation + vec3(0.0, ball_radius + 0.1, 0.0),
         ));
+
+        if ring_name.ends_with("_wood") {
+            commands.entity(ball_entity).insert((
+                Damping {
+                    linear_damping: 1.0,
+                    angular_damping: 2.0,
+                },
+                ColliderMassProperties::Mass(0.2),
+                MeshMaterial3d(materials.add(material("wood_table", &asset_server))),
+            ));
+        }
     }
 }
 
@@ -748,5 +740,36 @@ where
         }
     } else {
         None
+    }
+}
+
+fn material(material_name: &str, asset_server: &AssetServer) -> StandardMaterial {
+    StandardMaterial {
+        base_color_texture: Some(asset_server.load(format!(
+            "textures/{}/{}_diff_4k.png",
+            material_name, material_name
+        ))),
+        depth_map: Some(asset_server.load(format!(
+            "textures/{}/{}_disp_4k.png",
+            material_name, material_name
+        ))),
+        parallax_depth_scale: 0.01,
+        normal_map_texture: Some(asset_server.load(format!(
+            "textures/{}/{}_nor_gl_4k.png",
+            material_name, material_name
+        ))),
+        diffuse_transmission_texture: Some(asset_server.load(format!(
+            "textures/{}/{}_diff_4k.png",
+            material_name, material_name
+        ))),
+        occlusion_texture: Some(asset_server.load(format!(
+            "textures/{}/{}_ao_4k.png",
+            material_name, material_name
+        ))),
+        metallic_roughness_texture: Some(asset_server.load(format!(
+            "textures/{}/{}_rough_4k.png",
+            material_name, material_name
+        ))),
+        ..default()
     }
 }

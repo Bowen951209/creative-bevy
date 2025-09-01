@@ -166,7 +166,7 @@
 		},
 		{
 			"mesh":8,
-			"name":"trans_paper",
+			"name":"trans_wood",
 			"translation":[
 				2.107929229736328,
 				-0.7299277782440186,
@@ -488,7 +488,7 @@
 			]
 		},
 		{
-			"name":"trans_paper",
+			"name":"trans_wood",
 			"primitives":[
 				{
 					"attributes":{
