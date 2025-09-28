@@ -20,6 +20,9 @@ use creative_bevy::plugins::{
 
 const THIRD_PERSON_CAMERA_SENSITIVITY: f32 = 0.000002;
 
+const BRICK_MASS: f32 = 1.0;
+const WOOD_MASS: f32 = 0.2;
+
 #[derive(Component)]
 struct TransformRing;
 
@@ -169,6 +172,7 @@ fn setup(
             Controller,
             Transform::from_translation(ball_position),
             RestartPosition(ball_position),
+            ColliderMassProperties::Mass(BRICK_MASS),
         ))
         .id();
 
@@ -273,7 +277,7 @@ fn detect_transform_ring(
     mut materials: ResMut<Assets<StandardMaterial>>,
     asset_server: Res<AssetServer>,
     ring_query: Query<(&Transform, &Name), With<TransformRing>>,
-    ball_query: Query<(&Transform, &Ball)>,
+    ball_query: Query<(&Transform, &Ball, &ColliderMassProperties)>,
 ) {
     for event in collision_events.read() {
         let Some(entity) = entity_started_collision(event, &ring_query) else {
@@ -291,19 +295,26 @@ fn detect_transform_ring(
         let ball = ball_query.get(ball_entity).unwrap();
         let ball_translation = ball.0.translation;
         let ball_radius = ball.1.radius;
+        let ball_mass = match ball.2 {
+            ColliderMassProperties::Mass(mass) => mass,
+            _ => {
+                panic!("Ball has non-mass mass properties!");
+            }
+        };
 
-        commands.entity(ball_entity).insert(Teleport::new(
-            ball_translation,
-            ring_transform.translation + vec3(0.0, ball_radius + 0.1, 0.0),
-        ));
+        // Only teleport and change mass if the ball is not already wood
+        if ring_name.ends_with("_wood") && *ball_mass != WOOD_MASS {
+            commands.entity(ball_entity).insert(Teleport::new(
+                ball_translation,
+                ring_transform.translation + vec3(0.0, ball_radius + 0.1, 0.0),
+            ));
 
-        if ring_name.ends_with("_wood") {
             commands.entity(ball_entity).insert((
                 Damping {
                     linear_damping: 1.0,
                     angular_damping: 2.0,
                 },
-                ColliderMassProperties::Mass(0.2),
+                ColliderMassProperties::Mass(WOOD_MASS),
                 MeshMaterial3d(materials.add(material("wood_table", &asset_server))),
             ));
         }
